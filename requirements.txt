@@ -1,0 +1,8 @@
+streamlit
+streamlit-webrtc
+opencv-python-headless
+mediapipe==0.10.21
+scipy
+numpy
+av
+protobuf<5.0.0
