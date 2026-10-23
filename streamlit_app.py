@@ -38,25 +38,13 @@ def calculate_mar(lip_pts):
 # --- Video Processor Class ---
 class DrowsyDetectorProcessor(VideoTransformerBase):
     def __init__(self):
-        # Safe fallback check for MediaPipe initialization across versions
-        if hasattr(mp, "solutions") and hasattr(mp.solutions, "face_mesh"):
-            self.face_mesh = mp.solutions.face_mesh.FaceMesh(
-                static_image_mode=False,
-                max_num_faces=1,
-                refine_landmarks=True,
-                min_detection_confidence=0.5,
-                min_tracking_confidence=0.5
-            )
-        else:
-            import mediapipe.python.solutions.face_mesh as fm
-            self.face_mesh = fm.FaceMesh(
-                static_image_mode=False,
-                max_num_faces=1,
-                refine_landmarks=True,
-                min_detection_confidence=0.5,
-                min_tracking_confidence=0.5
-            )
-            
+        self.mp_face_mesh = mp.solutions.face_mesh
+        self.face_mesh = self.mp_face_mesh.FaceMesh(
+            max_num_faces=1,
+            refine_landmarks=True,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
         self.sleep_frame_counter = 0
         self.yawn_frame_counter = 0
         self.total_yawns = 0
