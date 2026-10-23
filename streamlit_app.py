@@ -4,6 +4,8 @@ import mediapipe as mp
 import numpy as np
 from scipy.spatial import distance as dist
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase, RTCConfiguration
+import urllib.request
+import os
 
 # --- Page Configuration ---
 st.set_page_config(page_title="Drowsy Driver Detection Demo", page_icon="🚗", layout="centered")
@@ -17,7 +19,7 @@ MAR_THRESHOLD = 0.65
 SLEEP_FRAMES_LIMIT = 25
 YAWN_FRAMES_LIMIT = 20
 
-# MediaPipe Indices
+# MediaPipe Face Landmarker Landmark Indices (Correspond to legacy indices)
 LEFT_EYE = [362, 385, 387, 263, 373, 380]
 RIGHT_EYE = [33, 160, 158, 133, 153, 144]
 INNER_LIPS = [78, 81, 13, 311, 308, 402, 14, 178]
@@ -35,16 +37,26 @@ def calculate_mar(lip_pts):
     horiz = dist.euclidean(lip_pts[0], lip_pts[4])
     return (v1 + v2 + v3) / (3.0 * horiz)
 
-# --- Video Processor Class ---
+# Download the required MediaPipe model file if not present
+MODEL_PATH = "face_landmarker.task"
+if not os.path.exists(MODEL_PATH):
+    model_url = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
+    urllib.request.urlretrieve(model_url, MODEL_PATH)
+
+# --- Video Processor Class using Modern MediaPipe Tasks API ---
 class DrowsyDetectorProcessor(VideoTransformerBase):
     def __init__(self):
-        self.mp_face_mesh = mp.solutions.face_mesh
-        self.face_mesh = self.mp_face_mesh.FaceMesh(
-            max_num_faces=1,
-            refine_landmarks=True,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
+        from mediapipe.tasks import python
+        from mediapipe.tasks.python import vision
+
+        base_options = python.BaseOptions(model_asset_path=MODEL_PATH)
+        options = vision.FaceLandmarkerOptions(
+            base_options=base_options,
+            running_mode=vision.RunningMode.IMAGE,
+            num_faces=1
         )
+        self.detector = vision.FaceLandmarker.create_from_options(options)
+        
         self.sleep_frame_counter = 0
         self.yawn_frame_counter = 0
         self.total_yawns = 0
@@ -53,15 +65,17 @@ class DrowsyDetectorProcessor(VideoTransformerBase):
     def transform(self, frame):
         img = frame.to_ndarray(format="bgr24")
         h, w, _ = img.shape
-        rgb_frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        results = self.face_mesh.process(rgb_frame)
+        
+        # Convert to MediaPipe Image format
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        detection_result = self.detector.detect(mp_image)
 
         status_text = "STATUS: ACTIVE & ALERT"
         status_color = (0, 255, 0) # Green
 
-        if results.multi_face_landmarks:
-            for face_landmarks in results.multi_face_landmarks:
-                landmarks = [(int(pt.x * w), int(pt.y * h)) for pt in face_landmarks.landmark]
+        if detection_result.face_landmarks:
+            for face_landmarks in detection_result.face_landmarks:
+                landmarks = [(int(pt.x * w), int(pt.y * h)) for pt in face_landmarks]
 
                 left_eye = [landmarks[i] for i in LEFT_EYE]
                 right_eye = [landmarks[i] for i in RIGHT_EYE]
