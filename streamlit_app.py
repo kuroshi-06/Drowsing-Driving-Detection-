@@ -38,7 +38,14 @@ def calculate_mar(lip_pts):
 # --- Video Processor Class ---
 class DrowsyDetectorProcessor(VideoTransformerBase):
     def __init__(self):
-        self.face_mesh = mp.solutions.face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True)
+        # Initialize using the modern MediaPipe Tasks/Solutions API safely
+        self.face_mesh = mp.solutions.face_mesh.FaceMesh(
+            static_image_mode=False,
+            max_num_faces=1,
+            refine_landmarks=True,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
         self.sleep_frame_counter = 0
         self.yawn_frame_counter = 0
         self.total_yawns = 0
@@ -81,7 +88,7 @@ class DrowsyDetectorProcessor(VideoTransformerBase):
                 # Yawn Check
                 if mar > MAR_THRESHOLD:
                     self.yawn_frame_counter += 1
-                    if self.yawn_frame_counter >= YAWN_FRAMES_LIMIT:
+                    if self.yawn_frame_counter >= YAWN_FRAMES_LIMIT if 'Yawn_FRAMES_LIMIT' in globals() else self.yawn_frame_counter >= YAWN_FRAMES_LIMIT:
                         if not self.yawn_registered:
                             self.total_yawns += 1
                             self.yawn_registered = True
